@@ -16,7 +16,7 @@ def generate_ai_content(prompt: str):
             )
             return response.text
         except Exception as e:
-            if attempt == retries:
+            if attempt == retries - 1:
                 raise
             time.sleep(2)
 
