@@ -9,7 +9,14 @@ class WhisperServiceImpl(AudioProcessorService):
         super().__init__(chunk_sec,sample_rate)
         self.model = model
 
-
     def transcribe(self, audio: np.ndarray, language: str = "de") -> str:
-        segments, info = self.model.transcribe(audio, language=language, vad_filter=False)
+        context_prompt = "Gespräch mit dem Roboter Pepper. Pepper wird in den meisten Fällen am Anfang des Satzes gesagt"
+
+        segments, info = self.model.transcribe(
+            audio,
+            language=language,
+            vad_filter=False,
+            initial_prompt=context_prompt
+        )
+
         return "".join(seg.text for seg in segments).strip()
