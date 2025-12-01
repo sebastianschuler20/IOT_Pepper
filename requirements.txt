@@ -1,0 +1,7 @@
+faster-whisper
+google-genai
+keyboard
+numpy
+sounddevice
+spur
+paramiko
