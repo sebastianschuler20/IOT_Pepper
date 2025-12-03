@@ -1,7 +1,13 @@
-faster-whisper
+--index-url https://download.pytorch.org/whl/cpu
+--extra-index-url https://pypi.org/simple
 google-genai
 keyboard
 numpy
 sounddevice
 spur
 paramiko
+torch==2.3.1
+transformers
+sentencepiece
+safetensors
+vosk

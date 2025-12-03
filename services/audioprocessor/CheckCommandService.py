@@ -1,4 +1,5 @@
 import re
+from typing import Callable, Dict
 
 
 class CommandService:
@@ -23,6 +24,23 @@ class CommandService:
                 r"^(?:pepper\s+)?lied\b"  # Falls jemand nur "Lied" oder "Pepper Lied" sagt
             ],
         }
+
+        self.intent_functions: Dict[str, Dict[str, Callable[[str], str]]] = {
+            "dance": {
+                "description": "Lässt Pepper tanzen.",
+                "handler": lambda _: self.dance_action(),
+            },
+            "sing": {
+                "description": "Lässt Pepper ein Lied singen.",
+                "handler": lambda _: self.sing_action(),
+            },
+        }
+
+    def get_intent_functions(self) -> Dict[str, Dict[str, Callable[[str], str]]]:
+        """
+        Returns the available intent functions with descriptions and handlers.
+        """
+        return self.intent_functions
 
     def check_command(self, text: str):
         if not text:
@@ -50,9 +68,23 @@ class CommandService:
         Führt die eigentliche Roboter-Logik aus.
         """
         if command_type == "TANZEN":
-            print("🤖 ROBOTER AKTION: Ich tanze jetzt! 💃")
+            return self.dance_action()
 
         elif command_type == "SINGEN":
-            print("🤖 ROBOTER AKTION: La la laaaa! 🎵")
+            return self.sing_action()
 
         return None
+
+    def dance_action(self) -> str:
+        """
+        Placeholder for dance action logic.
+        """
+        print("🤖 ROBOTER AKTION: Ich tanze jetzt! 💃")
+        return "Ich tanze jetzt! 💃"
+
+    def sing_action(self) -> str:
+        """
+        Placeholder for singing logic.
+        """
+        print("🤖 ROBOTER AKTION: La la laaaa! 🎵")
+        return "La la laaaa! 🎵"
