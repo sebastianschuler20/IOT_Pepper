@@ -5,7 +5,7 @@ from google import genai
 
 class GeminiServiceImpl(ChatbotService):
     def __init__(self):
-        self.client = genai.Client(api_key="AIzaSyCpT4JNgIPOGYat2Ajbg_GbXKn7wQS16_c")
+        self.client = genai.Client(api_key="API-KEY EINFÜGEN HIER")
 
     def generate_response(self, prompt: str):
         retries = 2
