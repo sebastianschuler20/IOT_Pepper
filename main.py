@@ -43,6 +43,7 @@ if ssh_host == "HIER_IP_EINFUEGEN":
     print("SSHService NICHT gestartet: keine IP hinterlegt und aktuell kein Zugriff auf das Gerät.")
 else:
     sshService = SSHService(host=ssh_host, username="nao", password="nao", key_filename=None)
+    sshService.connect()
     print(f"SSHService bereit für Host {ssh_host}.")
 
 print("System bereit. Kontinuierliche Aufnahme läuft (~10s Fenster). STRG+C zum Beenden.")

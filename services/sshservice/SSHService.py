@@ -50,23 +50,32 @@ class SSHService:
         """
         shell = self._ensure_shell()
         result = shell.run(
-            ["bash", "-lc", command],
-            stdout=ssh.PIPE,
-            stderr=ssh.PIPE,
+            ["sh", "-c", command],  # oder ["bash", "-lc", command] falls vorhanden
             allow_error=True,
+            # optional: encoding direkt hier setzen, falls du in __init__ keins setzt
+            encoding="utf-8",
         )
-        stdout = result.output.decode() if result.output else ""
-        stderr = result.stderr_output.decode() if result.stderr_output else ""
+
+        # Wenn encoding gesetzt ist, sind output/stderr_output schon str
+        stdout = result.output or ""
+        stderr = result.stderr_output or ""
         return stdout, stderr, result.return_code
 
-    def execute_dance(self) -> Tuple[str, str, int]:
-        """
-        Placeholder: hier das NAOqi-Modul reinschreiben, das den Tanz ausführt.
-        """
-        return self.execute("echo 'Hier das NAOqi-Modul reinschreiben (Dance).'")
-
     def execute_talk(self, text: str) -> Tuple[str, str, int]:
+        command = f'qicli call ALTextToSpeech.say "{text}"'
+
+        return self.execute(command)
+
+    def execute_wave(self) -> Tuple[str, str, int]:
         """
-        Placeholder: hier das NAOqi-Modul reinschreiben, das den Text sprechen lässt.
+        Lässt Pepper mit dem rechten Arm winken.
         """
-        return self.execute(f"echo 'Hier das NAOqi-Modul reinschreiben (Talk): {text}'")
+        command = (
+            'qicli call ALMotion.setStiffnesses "RArm" 1.0 && '
+            'qicli call ALMotion.setAngles "RShoulderPitch" -0.4 0.2 && '
+            'qicli call ALMotion.setAngles "RElbowRoll" 1.0 0.2 && '
+            'qicli call ALMotion.setAngles "RWristYaw" 1.0 0.3 && '
+            'sleep 0.3 && '
+            'qicli call ALMotion.setAngles "RWristYaw" -1.0 0.3'
+        )
+        return self.execute(command)
