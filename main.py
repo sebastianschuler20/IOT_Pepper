@@ -83,12 +83,14 @@ try:
                         response_text = intentRouter.execute(intent_name, combined)
                         if response_text:
                             print(f"Pepper sagt: {response_text}")
+                            sshService.execute_talk(response_text)
                         else:
                             print("Intent hatte keine Antwort zurückgegeben.")
                     else:
                         print("Kein Intent erkannt, fallback zu Gemini …")
                         response = geminiService.generate_response(combined)
                         print(response)
+                        sshService.execute_talk(response)
                     # Reset für nächste Aktivierung
                     buffer.clear()
                     total_samples = 0
