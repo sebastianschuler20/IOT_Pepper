@@ -14,7 +14,18 @@ print("VoskService bereit.")
 geminiService = GeminiServiceImpl()
 print("GeminiService bereit.")
 
-commandService = CommandService()
+# --- SSH zuerst ---
+ssh_host = "HIER_IP_EINFUEGEN"
+sshService = None
+if ssh_host == "HIER_IP_EINFUEGEN":
+    print("SSHService NICHT gestartet: keine IP hinterlegt und aktuell kein Zugriff auf das Gerät.")
+else:
+    sshService = SSHService(host=ssh_host, username="nao", password="nao", key_filename=None)
+    sshService.connect()
+    print(f"SSHService bereit für Host {ssh_host}.")
+
+# CommandService mit SSHService verknüpfen
+commandService = CommandService(ssh_service=sshService)
 print("CommandService bereit.")
 
 intent_functions = {
@@ -37,22 +48,13 @@ intentRouter = IntentRouterService(
 )
 print("IntentRouter bereit.")
 
-ssh_host = "HIER_IP_EINFUEGEN"
-sshService = None
-if ssh_host == "HIER_IP_EINFUEGEN":
-    print("SSHService NICHT gestartet: keine IP hinterlegt und aktuell kein Zugriff auf das Gerät.")
-else:
-    sshService = SSHService(host=ssh_host, username="nao", password="nao", key_filename=None)
-    sshService.connect()
-    print(f"SSHService bereit für Host {ssh_host}.")
-
 print("System bereit. Kontinuierliche Aufnahme läuft (~10s Fenster). STRG+C zum Beenden.")
 buffer = deque()
 target_samples = 10 * voskService.sample_rate
 total_samples = 0
 chunk_seconds = 0.5
 recognizer = voskService.create_recognizer()
-recent_texts = deque(maxlen=8)  # hält die letzten Result-Fragmente
+recent_texts = deque(maxlen=8)
 
 try:
     while True:
@@ -60,12 +62,10 @@ try:
         buffer.append(chunk)
         total_samples += len(chunk)
 
-        # Älteste Audiodaten verwerfen, bis wir grob 10s behalten
         while total_samples > target_samples and buffer:
             removed = buffer.popleft()
             total_samples -= len(removed)
 
-        # Streaming-Transkription Chunk für Chunk
         pcm_chunk = voskService.audio_to_pcm(chunk)
         accepted = recognizer.AcceptWaveform(pcm_chunk)
 
@@ -81,17 +81,22 @@ try:
                     if intent_name:
                         print(f"Intent erkannt: {intent_name}")
                         response_text = intentRouter.execute(intent_name, combined)
+
                         if response_text:
                             print(f"Pepper sagt: {response_text}")
-                            sshService.execute_talk(response_text)
+
+                            # Nur für Intents, die NICHT bereits im CommandService sprechen,
+                            # den SSH-Talk hier ausführen.
+                            # if sshService and intent_name not in ("dance", "sing"):
+                            #     sshService.execute_talk(response_text)
                         else:
                             print("Intent hatte keine Antwort zurückgegeben.")
                     else:
                         print("Kein Intent erkannt, fallback zu Gemini …")
                         response = geminiService.generate_response(combined)
                         print(response)
-                        sshService.execute_talk(response)
-                    # Reset für nächste Aktivierung
+                        if sshService:
+                            sshService.execute_talk(response)
                     buffer.clear()
                     total_samples = 0
                     recent_texts.clear()
