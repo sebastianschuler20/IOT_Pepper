@@ -8,6 +8,7 @@ class CommandService:
     def __init__(self, ssh_service: Optional[SSHService] = None):
         # Referenz auf SSHService (kann None sein, z.B. für lokale Tests)
         self.ssh_service = ssh_service
+        self._smalltalk_handler: Optional[Callable[[str], str]] = None
 
         self.commands = {
             "TANZEN": [
@@ -21,12 +22,16 @@ class CommandService:
 
         self.intent_functions: Dict[str, Dict[str, Callable[[str], str]]] = {
             "dance": {
-                "description": "Lässt Pepper tanzen.",
+                "description": "Lässt Pepper tanzen – nur wählen bei eindeutigen Tanzbefehlen.",
                 "handler": lambda _: self.dance_action(),
             },
             "sing": {
-                "description": "Lässt Pepper ein Lied singen.",
+                "description": "Lässt Pepper ein Lied singen – nur wählen bei klaren Sing-/Lied-Anfragen.",
                 "handler": lambda _: self.sing_action(),
+            },
+            "smalltalk": {
+                "description": "Beantworte allgemeine Fragen, Smalltalk, Wetter, Status etc. Immer fallback wenn unsicher.",
+                "handler": self._handle_smalltalk,
             },
         }
 
@@ -35,6 +40,10 @@ class CommandService:
         Kann aufgerufen werden, nachdem der SSHService aufgebaut wurde.
         """
         self.ssh_service = ssh_service
+
+    def register_smalltalk_handler(self, handler: Callable[[str], str]) -> None:
+        """Bindet den Handler für Smalltalk-Intents (z.B. Gemini) an."""
+        self._smalltalk_handler = handler
 
     def get_intent_functions(self) -> Dict[str, Dict[str, Callable[[str], str]]]:
         return self.intent_functions
@@ -92,3 +101,11 @@ class CommandService:
             print("[WARNUNG] Kein SSHService konfiguriert – Singen nur lokal geloggt.")
 
         return text
+
+    def _handle_smalltalk(self, text: str) -> str:
+        """Erzeugt Smalltalk-Antworten über den registrierten Handler."""
+        if self._smalltalk_handler:
+            return self._smalltalk_handler(text)
+
+        print("[WARNUNG] Kein Smalltalk-Handler registriert – gebe leere Antwort zurück.")
+        return ""

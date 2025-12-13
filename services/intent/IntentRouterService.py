@@ -58,7 +58,8 @@ class IntentRouterService:
             "Antwortformat: Gib nur ein JSON-Objekt wie "
             '{"function": "<funktionsname>"} zurück. '
             "Verwende ausschließlich Funktionsnamen aus der Liste. "
-            "Wenn nichts passt, nutze \"none\"."
+            "Wenn du unsicher bist oder keine klare Zuordnung findest, gib zwingend \"smalltalk\" an. "
+            "Nutze \"none\" ausschließlich, wenn du dir absolut sicher bist, dass keine Funktion passt."
             "\n\nVerfügbare Funktionen:\n"
             f"{functions_block}"
         )
@@ -97,8 +98,11 @@ class IntentRouterService:
 
         # Try strict JSON parsing first.
         func_name = self._extract_function_name(raw_output)
-        if func_name and func_name in self.functions:
-            return func_name
+        if func_name:
+            if func_name.lower() == "none":
+                return None
+            if func_name in self.functions:
+                return func_name
 
         return None
 

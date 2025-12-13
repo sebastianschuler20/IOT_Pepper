@@ -5,6 +5,7 @@ from services.intent.IntentRouterService import IntentFunction, IntentRouterServ
 from services.sshservice.SSHService import SSHService
 import numpy as np
 from collections import deque
+import threading
 
 print("Initialisiere Services...")
 vosk_model_path = "models/vosk-model-small-de-0.15"
@@ -15,7 +16,7 @@ geminiService = GeminiServiceImpl()
 print("GeminiService bereit.")
 
 # --- SSH zuerst ---
-ssh_host = "HIER_IP_EINFUEGEN"
+ssh_host = "HIER_IP_EINFUEGEN" #"143.93.211.53"
 sshService = None
 if ssh_host == "HIER_IP_EINFUEGEN":
     print("SSHService NICHT gestartet: keine IP hinterlegt und aktuell kein Zugriff auf das Gerät.")
@@ -24,8 +25,17 @@ else:
     sshService.connect()
     print(f"SSHService bereit für Host {ssh_host}.")
 
+
+def speak_async(text: str) -> None:
+    """Spricht den Text über SSH ohne den Haupt-Thread zu blockieren."""
+    if sshService:
+        threading.Thread(target=sshService.execute_talk, args=(text,), daemon=True).start()
+    else:
+        print(f"Pepper (lokal): {text}")
+
 # CommandService mit SSHService verknüpfen
 commandService = CommandService(ssh_service=sshService)
+commandService.register_smalltalk_handler(lambda text: geminiService.generate_response(text))
 print("CommandService bereit.")
 
 intent_functions = {
@@ -35,10 +45,6 @@ intent_functions = {
     )
     for name, meta in commandService.get_intent_functions().items()
 }
-intent_functions["smalltalk"] = IntentFunction(
-    description="Beantworte allgemeine Fragen oder führe Smalltalk.",
-    handler=lambda text: geminiService.generate_response(text),
-)
 
 qwen_model_path = "models/qwen2_5-0_5b_instruct"
 intentRouter = IntentRouterService(
@@ -49,12 +55,20 @@ intentRouter = IntentRouterService(
 print("IntentRouter bereit.")
 
 print("System bereit. Kontinuierliche Aufnahme läuft (~10s Fenster). STRG+C zum Beenden.")
+if sshService:
+    # Confirm successful setup via Pepper's speech interface.
+    sshService.execute_talk("Die Verbindung steht.")
+else:
+    print("Hinweis: Kein SSHService aktiv, daher keine Sprachbestätigung.")
 buffer = deque()
 target_samples = 10 * voskService.sample_rate
 total_samples = 0
 chunk_seconds = 0.5
 recognizer = voskService.create_recognizer()
-recent_texts = deque(maxlen=8)
+command_texts = deque(maxlen=8)
+wake_window = deque(maxlen=4)
+wake_phrase = "hey pepper"
+listening_for_command = False
 
 try:
     while True:
@@ -72,35 +86,67 @@ try:
         if accepted:
             final_text = voskService._decode_result(recognizer.Result())
             if final_text:
-                recent_texts.append(final_text)
-                combined = " ".join(recent_texts).strip()
-                print(f"[Transkript] {combined}")
-                if "pepper" in combined.lower():
-                    print("Keyword 'pepper' erkannt. Intent wird bestimmt …")
-                    intent_name = intentRouter.predict_intent(combined)
-                    if intent_name:
-                        print(f"Intent erkannt: {intent_name}")
-                        response_text = intentRouter.execute(intent_name, combined)
+                final_text = final_text.strip()
+                if not final_text:
+                    continue
 
-                        if response_text:
-                            print(f"Pepper sagt: {response_text}")
+                if listening_for_command:
+                    command_texts.append(final_text)
+                    transcript_view = " ".join(command_texts).strip()
+                else:
+                    wake_window.append(final_text)
+                    transcript_view = " ".join(wake_window).strip()
 
-                            # Nur für Intents, die NICHT bereits im CommandService sprechen,
-                            # den SSH-Talk hier ausführen.
-                            # if sshService and intent_name not in ("dance", "sing"):
-                            #     sshService.execute_talk(response_text)
-                        else:
-                            print("Intent hatte keine Antwort zurückgegeben.")
+                print(f"[Transkript] {transcript_view}")
+
+                if not listening_for_command:
+                    window_lower = transcript_view.lower()
+                    if wake_phrase in window_lower:
+                        listening_for_command = True
+                        command_texts.clear()
+                        wake_window.clear()
+                        after_idx = window_lower.rfind(wake_phrase) + len(wake_phrase)
+                        remaining_text = transcript_view[after_idx:].strip()
+                        if remaining_text:
+                            command_texts.append(remaining_text)
+                        print("Aktivierungsphrase 'hey pepper' erkannt. Befehl wird aufgenommen …")
+                        speak_async("Wie kann ich helfen?")
                     else:
-                        print("Kein Intent erkannt, fallback zu Gemini …")
-                        response = geminiService.generate_response(combined)
-                        print(response)
-                        if sshService:
-                            sshService.execute_talk(response)
-                    buffer.clear()
-                    total_samples = 0
-                    recent_texts.clear()
-                    recognizer = voskService.create_recognizer()
+                        continue
+
+                command_input = " ".join(command_texts).strip()
+                if not command_input:
+                    continue
+
+                print("Intent wird bestimmt …")
+                speak_async("Eine Sekunde, da muss ich kurz überlegen.")
+                intent_name = intentRouter.predict_intent(command_input)
+                if intent_name in ("dance", "sing"):
+                    matched_command = commandService.check_command(command_input)
+                    expected = "TANZEN" if intent_name == "dance" else "SINGEN"
+                    if matched_command != expected:
+                        print(
+                            "Intent scheint unsicher (keine passende Sprachregel) – fallback zu Smalltalk."
+                        )
+                        intent_name = None
+                intent_name = intent_name or "smalltalk"
+                print(f"Intent erkannt: {intent_name}")
+                response_text = intentRouter.execute(intent_name, command_input)
+
+                if response_text:
+                    print(f"Pepper sagt: {response_text}")
+                    # Nur für Intents, die NICHT bereits im CommandService sprechen,
+                    # den SSH-Talk hier ausführen.
+                    if sshService and intent_name == "smalltalk":
+                        sshService.execute_talk(response_text)
+                else:
+                    print("Intent hatte keine Antwort zurückgegeben.")
+                buffer.clear()
+                total_samples = 0
+                command_texts.clear()
+                wake_window.clear()
+                listening_for_command = False
+                recognizer = voskService.create_recognizer()
         else:
             partial_text = voskService._decode_partial(recognizer.PartialResult())
             if partial_text:
